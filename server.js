@@ -71,6 +71,14 @@ app.get('/photos', (_req, res) => {
   }
 });
 
+// Reset reveal timer
+app.post('/reset-reveal', (_req, res) => {
+  REVEAL_AFTER = null;
+  console.log('Reveal timer reset manually.');
+  res.send('Reveal timer reset.');
+  broadcastState();
+});
+
 // ── WEBSOCKET ─────────────────────────────────────────────────────────────────
 const connections = new Map(); // ws → playerName
 

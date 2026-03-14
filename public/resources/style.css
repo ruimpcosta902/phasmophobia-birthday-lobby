@@ -341,8 +341,7 @@ body::after {
 
 .polaroid-frame {
     width: 100%;
-    min-height: 500px;
-    max-height: 70vh;
+    height: 500px;
     overflow: hidden;
     border: 1px solid var(--border);
     background: #090b0d;
@@ -353,8 +352,7 @@ body::after {
 
 .polaroid-frame img {
     width: 100%;
-    min-height: 100px;
-    min-width: 100px;
+    height: 100%;
     object-fit: contain;
 }
 

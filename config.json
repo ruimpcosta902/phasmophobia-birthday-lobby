@@ -2,7 +2,7 @@
   "mapName": "Sunny Meadows Mental Institution",
   "altMapName": "6 Tanglewood Drive",
   "difficulty": "Nightmare",
-  "revealAfterMin": 2,
+  "revealAfterMin": 3,
   "players": [
     "RuiQosta",
     "niseca"

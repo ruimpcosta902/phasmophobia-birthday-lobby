@@ -64,7 +64,7 @@ function setWaitingPhoto(idx) {
 function startPhotoCarousel() {
     if (!waitingPhotos.length) return;
     setWaitingPhoto(0);
-    carouselInterval = setInterval(() => setWaitingPhoto(waitingPhotoIndex + 1), 4200);
+    carouselInterval = setInterval(() => setWaitingPhoto(waitingPhotoIndex + 1), 7500);
 }
 
 function stopPhotoCarousel() {
@@ -141,6 +141,10 @@ playerInput.addEventListener('keydown', (event) => {
 
 // ── Lobby render ──────────────────────────────────────────
 function renderLobby({ players, allConnected }) {
+    if (waitingEl.classList.contains('visible')) {
+        hideWaiting();
+    }
+
     const connN = players.filter(p => p.connected).length;
     const readyN = players.filter(p => p.ready).length;
     const total = players.length;
@@ -211,6 +215,18 @@ function showWaiting() {
     }, 600);
 }
 
+function hideWaiting() {
+    addLog('// Something happened, back to lobby!', 'warn');
+
+    stopPhotoCarousel();
+    heartbeatSound.pause();
+
+    fadeOut(waitingEl, () => {
+        waitingEl.classList.remove('visible');
+        fadeIn(lobbyEl, raf2(() => { lobbyEl.style.display = 'flex'; lobbyEl.classList.add('visible'); }));
+    });
+}
+
 function startCountdown() {
     function tick() {
         const diff = revealAfter - new Date();
@@ -245,6 +261,14 @@ function fadeOut(el, cb) {
     el.style.opacity = '0';
     setTimeout(() => { el.style.display = 'none'; cb(); }, 400);
 }
+function fadeIn(el, cb) {
+    el.classList.add('visible');
+    el.style.transition = 'opacity 0.4s ease';
+    el.style.opacity = '1';
+
+    setTimeout(() => cb(), 10);
+}
+
 function raf2(fn) { requestAnimationFrame(() => requestAnimationFrame(fn)); }
 
 // ── WebSocket ─────────────────────────────────────────────

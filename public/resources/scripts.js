@@ -293,6 +293,16 @@ function connect() {
                 addLog(`// Operation window opens at ${revealAfter.toLocaleString()}.`, 'info');
                 break;
             }
+            case 'reload': {
+                addLog('// Server requested reload due to config update.', 'info');
+                setTimeout(() => location.reload(), 1000);
+                break;
+            }
+            case 'config': {
+                addLog('// Server config changed. Reloading.', 'info');
+                setTimeout(() => location.reload(), 1000);
+                break;
+            }
         }
     };
 

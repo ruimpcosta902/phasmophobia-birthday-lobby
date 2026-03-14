@@ -11,14 +11,27 @@ const BASEURL = process.env.BASEURL || `http://localhost:${PORT}`;
 const resourcesDir = path.join(__dirname, 'public', 'resources');
 const imgDir = path.join(resourcesDir, 'img');
 
-const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-const { mapName, difficulty, players } = cfg;
-const REVEAL_AFTER_MIN = cfg.revealAfterMin;
+const configPath = path.join(__dirname, 'config.json');
+
+let cfg = loadConfig();
 let REVEAL_AFTER = null;
 
-console.log(`Map: ${mapName} (${difficulty})`);
-console.log(`Players: ${players.join(', ')}`);
-console.log(`Reveal after: ${REVEAL_AFTER_MIN} minutes from all ready`);
+function loadConfig() {
+  const raw = fs.readFileSync(configPath, 'utf8');
+  const parsed = JSON.parse(raw);
+  const players = Array.isArray(parsed.players) ? parsed.players.map(String) : [];
+
+  return {
+    mapName: String(parsed.mapName || 'unknown'),
+    difficulty: String(parsed.difficulty || 'normal'),
+    players,
+    revealAfterMin: Number(parsed.revealAfterMin) || 0,
+  };
+}
+
+console.log(`Map: ${cfg.mapName} (${cfg.difficulty})`);
+console.log(`Players: ${cfg.players.join(', ')}`);
+console.log(`Reveal after: ${cfg.revealAfterMin} minutes from all ready`);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── LOBBY ─────────────────────────────────────────────────────────────────────
@@ -28,7 +41,7 @@ db.exec(`CREATE TABLE players (
 )`);
 
 const insert = db.prepare('INSERT INTO players (name) VALUES (?)');
-for (const name of players) insert.run(name);
+for (const name of cfg.players) insert.run(name);
 
 const getPlayers   = db.prepare('SELECT * FROM players ORDER BY rowid');
 const setConnected = db.prepare('UPDATE players SET connected = ? WHERE name = ?');
@@ -53,10 +66,61 @@ const wss    = new WebSocketServer({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/resources', express.static(path.join(__dirname, 'public', 'resources')));
+app.use(express.json());
 
 // Frontend fetches this to get lobby config on load
 app.get('/config', (_req, res) => {
-  res.json({ mapName, difficulty, players, revealAfter: REVEAL_AFTER });
+  res.json({
+    mapName: cfg.mapName,
+    difficulty: cfg.difficulty,
+    players: cfg.players,
+    revealAfter: REVEAL_AFTER,
+    revealAfterMin: cfg.revealAfterMin,
+  });
+});
+
+app.post('/config', (req, res) => {
+  const next = req.body;
+  if (!next || typeof next !== 'object') {
+    return res.status(400).json({ error: 'Invalid config payload' });
+  }
+
+  const nextPlayers = Array.isArray(next.players) ? next.players.map(String) : null;
+  const nextMap = typeof next.mapName === 'string' ? next.mapName : null;
+  const nextDifficulty = typeof next.difficulty === 'string' ? next.difficulty : null;
+  const nextRevealAfterMin = Number.isFinite(Number(next.revealAfterMin)) ? Number(next.revealAfterMin) : null;
+
+  if (!nextMap || !nextDifficulty || !Array.isArray(nextPlayers) || nextPlayers.length === 0 || nextRevealAfterMin === null) {
+    return res.status(400).json({ error: 'Must include mapName, difficulty, players (non-empty array), revealAfterMin' });
+  }
+
+  const prevPlayers = cfg.players;
+  const playersChanged = prevPlayers.length !== nextPlayers.length
+    || prevPlayers.some((p, i) => p !== nextPlayers[i])
+    || nextPlayers.some((p, i) => p !== prevPlayers[i]);
+
+  cfg = {
+    mapName: nextMap,
+    difficulty: nextDifficulty,
+    players: nextPlayers,
+    revealAfterMin: nextRevealAfterMin,
+  };
+
+  console.log('Config updated via POST /config:', cfg);
+
+  if (playersChanged) {
+    // Refresh lobby data, clear and reset tracked players to avoid stale state.
+    db.exec('DELETE FROM players');
+    for (const name of cfg.players) {
+      insert.run(name);
+    }
+    REVEAL_AFTER = null;
+    broadcast({ type: 'reload', message: 'Config updated, reload required' });
+    return res.json({ status: 'ok', message: 'Config updated, clients reloading' });
+  }
+
+  broadcast({ type: 'config', config: { mapName: cfg.mapName, difficulty: cfg.difficulty, revealAfterMin: cfg.revealAfterMin } });
+  return res.json({ status: 'ok', message: 'Config updated' });
 });
 
 // Provide photo list for the waiting carousel
@@ -115,8 +179,8 @@ wss.on('connection', (ws, req) => {
     switch (msg.type) {
 
       case 'identify': {
-        const name = msg.name?.trim();
-        if (!players.includes(name)) {
+        const name = typeof msg.name === 'string' ? msg.name.trim() : null;
+        if (!cfg.players.includes(name)) {
           send(ws, { type: 'error', message: 'Unknown operative.' });
           return;
         }
@@ -148,7 +212,7 @@ wss.on('connection', (ws, req) => {
 
         if (getLobbyState().allReady) {
           if (REVEAL_AFTER === null) {
-            REVEAL_AFTER = addMinutes(REVEAL_AFTER_MIN);
+            REVEAL_AFTER = addMinutes(cfg.revealAfterMin);
             broadcast({ type: 'revealAfter', time: REVEAL_AFTER });
           }
 
@@ -183,7 +247,7 @@ wss.on('connection', (ws, req) => {
 server.listen(PORT, () => {
   console.log(`Server ready: ${BASEURL}`);
   console.log("Player URLs:");
-  for (const name of players) {
+  for (const name of cfg.players) {
     console.log(`${BASEURL}?player=${name}`);
   }
 });

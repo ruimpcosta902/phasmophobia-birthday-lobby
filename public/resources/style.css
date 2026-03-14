@@ -1,0 +1,555 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg: #0a0c0e;
+    --panel: #111416;
+    --border: #1e2428;
+    --accent: #4ecdc4;
+    --ready: #5bff7f;
+    --danger: #ff4e4e;
+    --muted: #3a4a50;
+    --text: #c8d8dc;
+    --dim: #607880;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow-x: hidden;
+}
+
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.06) 2px, rgba(0, 0, 0, 0.06) 4px);
+}
+
+.panel {
+    width: 100%;
+    max-width: 560px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+}
+
+/* connection bar */
+#conn-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-align: center;
+    padding: 4px;
+    background: var(--danger);
+    color: #fff;
+    text-transform: uppercase;
+    display: none;
+}
+
+#conn-bar.show {
+    display: block;
+}
+
+/* error screen */
+#error-screen {
+    padding: 36px 28px;
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+}
+
+#error-screen h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--danger);
+    text-transform: uppercase;
+}
+
+#error-screen p {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.7;
+}
+
+#error-screen code {
+    color: var(--accent);
+}
+
+/* lobby */
+#lobby {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.header {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 18px 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.header-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    text-transform: uppercase;
+}
+
+.header-map {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.header-meta {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 2px;
+}
+
+.players-panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.players-header {
+    padding: 10px 16px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+}
+
+.player-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.3s;
+}
+
+.player-row:last-child {
+    border-bottom: none;
+}
+
+.player-row.is-you {
+    background: rgba(78, 205, 196, 0.04);
+}
+
+.player-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.4s;
+}
+
+.player-row.connected .player-dot {
+    background: var(--accent);
+}
+
+.player-row.ready-state .player-dot {
+    background: var(--ready);
+}
+
+.player-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    transition: color 0.3s;
+}
+
+.player-row.ready-state .player-name {
+    color: var(--ready);
+}
+
+.you-tag {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 1px 5px;
+    opacity: 0.6;
+}
+
+.player-status {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--dim);
+    text-transform: uppercase;
+    min-width: 80px;
+    text-align: right;
+    transition: color 0.3s;
+}
+
+.player-row.connected .player-status {
+    color: var(--accent);
+}
+
+.player-row.ready-state .player-status {
+    color: var(--ready);
+}
+
+.ready-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--muted);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.ready-btn:hover:not(:disabled):not(.is-ready) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.ready-btn.is-ready {
+    border-color: var(--ready);
+    color: var(--ready);
+    cursor: default;
+}
+
+.ready-btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.ready-btn.pulse {
+    animation: pulse 1s infinite;
+}
+
+.log {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 10px 16px;
+    font-size: 10px;
+    color: var(--dim);
+    min-height: 44px;
+    max-height: 90px;
+    overflow-y: auto;
+    line-height: 1.8;
+}
+
+.log-line {
+    color: var(--accent);
+}
+
+.log-line.warn {
+    color: #ffcc55;
+}
+
+.log-line.err {
+    color: var(--danger);
+}
+
+/* waiting */
+#waiting {
+    display: none;
+    padding: 40px 32px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+    max-width: 880px;
+}
+
+#waiting.visible {
+    opacity: 1;
+    transform: none;
+}
+
+.waiting-main {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+@media (max-width: 720px) {
+    .waiting-main {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .waiting-info {
+        width: 100%;
+    }
+}
+
+.waiting-visual {
+    flex: 0 0 360px;
+    display: flex;
+    justify-content: center;
+}
+
+.polaroid {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 18px 18px 14px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+    position: relative;
+}
+
+.polaroid-frame {
+    width: 100%;
+    min-height: 500px;
+    max-height: 70vh;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #090b0d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.polaroid-frame img {
+    width: 100%;
+    min-height: 100px;
+    min-width: 100px;
+    object-fit: contain;
+}
+
+.polaroid-caption {
+    margin-top: 12px;
+    text-align: center;
+}
+
+.polaroid-stars .star {
+    color: gold;
+    font-size: 14px;
+    margin: 0 2px;
+    opacity: 0.85;
+}
+
+.polaroid-title {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.waiting-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.waiting-tag {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    text-transform: uppercase;
+}
+
+.waiting-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--danger);
+    line-height: 1.3;
+}
+
+.waiting-sub {
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.7;
+}
+
+#countdown {
+    font-family: 'Orbitron', monospace;
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-top: 8px;
+}
+
+.waiting-note {
+    font-size: 10px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+    line-height: 1.7;
+}
+
+/* invite */
+#invite {
+    display: none;
+    flex-direction: column;
+    gap: 24px;
+    padding: 40px 32px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+#invite.visible {
+    opacity: 1;
+    display: flex;
+    transform: none;
+}
+
+.invite-tag {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    text-transform: uppercase;
+}
+
+.invite-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.2;
+}
+
+.invite-sub {
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.6;
+}
+
+.invite-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+}
+
+.detail-row {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.detail-label {
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    min-width: 80px;
+}
+
+.detail-value {
+    color: var(--text);
+}
+
+.invite-note {
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.7;
+}
+
+/* start screen */
+#start {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 40px 32px;
+}
+
+.start-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+}
+
+#start p {
+    font-size: 12px;
+    color: var(--dim);
+    text-align: center;
+    line-height: 1.7;
+}
+
+#player-input {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    padding: 6px 10px;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+}
+
+#player-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#enter-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    margin: 0 auto;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+#enter-btn:hover {
+    background: var(--accent);
+    color: var(--panel);
+}

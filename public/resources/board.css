@@ -1,0 +1,390 @@
+/* ============================================================
+   PHASMOPHOBIA OBJECTIVE BOARD — stylesheet
+   Usage: link this CSS, then use the HTML structure below.
+
+   Key classes:
+     .board               — the cork board container
+     .board__frame        — wooden outer frame
+     .board__header       — grey taped header bar
+     .board__case         — case number + name (left of header)
+     .board__responds     — "Responds to:" label (right of header)
+     .board__objectives   — row of objective note cards
+     .objective           — individual note card
+     .objective--complete — struck-through / ticked state
+     .board__empty-slots  — the faded ghost-note grid below
+============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Caveat:wght@400;600&display=swap');
+
+/* ── Reset & base ─────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* cork */
+  --cork-base: #b5813a;
+  --cork-mid: #c4913f;
+  --cork-light: #d4a554;
+  --cork-dark: #9a6a25;
+  /* wood frame */
+  --wood-light: #c8873a;
+  --wood-dark: #7a4a18;
+  --wood-shadow: #4a2a08;
+  /* header tape */
+  --tape-bg: #8a8e92;
+  --tape-edge: #6a6e72;
+  /* notes */
+  --note-bg: #f5f0e0;
+  --note-shadow: rgba(0, 0, 0, 0.35);
+  --note-line: rgba(0, 0, 0, 0.07);
+  /* pins */
+  --pin-red: #cc3322;
+  --pin-blue: #2244aa;
+  --pin-green: #228844;
+  --pin-yellow: #ddaa00;
+  /* text */
+  --ink: #1a1208;
+  --ink-faint: #3a2a10;
+}
+
+body {
+  background: #1a1410;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  font-family: 'Caveat', cursive;
+}
+
+/* ── Board frame ──────────────────────────────────────────── */
+.board {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+}
+
+.board__frame {
+  position: relative;
+  border-radius: 6px;
+  padding: 18px;
+
+  /* Layered wood grain */
+  background:
+    repeating-linear-gradient(91deg,
+      transparent,
+      transparent 6px,
+      rgba(0, 0, 0, 0.04) 6px,
+      rgba(0, 0, 0, 0.04) 7px),
+    repeating-linear-gradient(89deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.03) 40px,
+      rgba(255, 255, 255, 0.03) 41px),
+    linear-gradient(175deg,
+      var(--wood-light) 0%,
+      var(--wood-dark) 40%,
+      var(--wood-light) 60%,
+      var(--wood-dark) 100%);
+
+  box-shadow:
+    inset 0 3px 6px rgba(255, 255, 255, 0.15),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.4),
+    inset 3px 0 6px rgba(255, 255, 255, 0.1),
+    inset -3px 0 6px rgba(0, 0, 0, 0.3),
+    0 8px 32px rgba(0, 0, 0, 0.7),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Inner bevel line */
+.board__frame::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── Cork surface ─────────────────────────────────────────── */
+.board__cork {
+  position: relative;
+  border-radius: 2px;
+  min-height: 480px;
+  padding: 0 0 28px;
+  overflow: hidden;
+
+  /* Cork texture: layered noise-like gradients */
+  background-color: var(--cork-base);
+  background-image:
+    /* cork fibre spots */
+    radial-gradient(ellipse 3px 2px at 12% 8%, rgba(80, 40, 0, 0.25) 0%, transparent 100%),
+    radial-gradient(ellipse 2px 3px at 35% 22%, rgba(80, 40, 0, 0.18) 0%, transparent 100%),
+    radial-gradient(ellipse 4px 2px at 58% 14%, rgba(80, 40, 0, 0.22) 0%, transparent 100%),
+    radial-gradient(ellipse 2px 4px at 80% 7%, rgba(80, 40, 0, 0.20) 0%, transparent 100%),
+    radial-gradient(ellipse 3px 2px at 90% 35%, rgba(80, 40, 0, 0.18) 0%, transparent 100%),
+    radial-gradient(ellipse 2px 3px at 70% 55%, rgba(80, 40, 0, 0.22) 0%, transparent 100%),
+    radial-gradient(ellipse 4px 2px at 20% 65%, rgba(80, 40, 0, 0.20) 0%, transparent 100%),
+    radial-gradient(ellipse 3px 3px at 45% 80%, rgba(80, 40, 0, 0.18) 0%, transparent 100%),
+    radial-gradient(ellipse 2px 2px at 65% 90%, rgba(80, 40, 0, 0.22) 0%, transparent 100%),
+    /* large tonal variation */
+    radial-gradient(ellipse 60% 40% at 30% 30%, var(--cork-light) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 75% 70%, var(--cork-mid) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 10% 80%, var(--cork-dark) 0%, transparent 70%),
+    /* overall vignette */
+    radial-gradient(ellipse 90% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.22) 100%);
+
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Header bar (grey tape strip) ─────────────────────────── */
+.board__header {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  margin: 0 24px;
+  margin-bottom: 28px;
+
+  background: var(--tape-bg);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+
+  /* Tape-like edge detail */
+  border-top: 2px solid var(--tape-edge);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+/* Torn tape edge texture on left & right */
+.board__header::before,
+.board__header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: repeating-linear-gradient(180deg,
+      transparent,
+      transparent 4px,
+      rgba(0, 0, 0, 0.1) 4px,
+      rgba(0, 0, 0, 0.1) 5px);
+}
+
+.board__header::before {
+  left: -10px;
+  border-radius: 0 0 0 3px;
+}
+
+.board__header::after {
+  right: -10px;
+  border-radius: 0 0 3px 0;
+}
+
+.board__case {
+  flex: 1;
+  padding: 10px 18px;
+  font-family: 'Permanent Marker', cursive;
+  font-size: clamp(16px, 2.4vw, 22px);
+  color: var(--ink);
+  letter-spacing: 0.02em;
+  border-right: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.board__responds {
+  padding: 10px 18px;
+  font-family: 'Permanent Marker', cursive;
+  font-size: clamp(14px, 2vw, 19px);
+  color: var(--ink);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.board__responds-label {
+  opacity: 0.7;
+}
+
+.board__responds-value {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+/* ── Objectives row ───────────────────────────────────────── */
+.board__objectives {
+  display: flex;
+  gap: 20px;
+  padding: 0 24px;
+  margin-bottom: 32px;
+  align-items: flex-start;
+  flex-flow: wrap;
+}
+
+/* ── Individual note card ─────────────────────────────────── */
+.objective {
+  position: relative;
+  flex: 1;
+  min-height: 80px;
+  min-width: 31%;
+  padding: 14px 16px 16px;
+  background: var(--note-bg);
+
+  /* Lined paper effect */
+  background-image:
+    linear-gradient(var(--note-line) 1px, transparent 1px);
+  background-size: 100% 24px;
+  background-position: 0 30px;
+
+  font-family: 'Permanent Marker', cursive;
+  font-size: clamp(12px, 1.5vw, 15px);
+  line-height: 1.5;
+  color: var(--ink);
+  text-align: center;
+
+  /* Slight random rotation — override per card with a custom property */
+  transform: rotate(var(--rot, -1deg));
+  transform-origin: top center;
+
+  box-shadow:
+    2px 4px 10px var(--note-shadow),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Unique rotation per position */
+.objective:nth-child(1) {
+  --rot: -1.5deg;
+}
+
+.objective:nth-child(2) {
+  --rot: 0.8deg;
+}
+
+.objective:nth-child(3) {
+  --rot: -0.5deg;
+}
+
+.objective:nth-child(4) {
+  --rot: 1.2deg;
+}
+
+/* ── Completed state ──────────────────────────────────────── */
+.objective--complete {
+  opacity: 0.7;
+}
+
+.objective--complete .objective__text {
+  text-decoration: line-through;
+  text-decoration-color: rgba(180, 0, 0, 0.6);
+  text-decoration-thickness: 2px;
+}
+
+.objective--complete::after {
+  content: '✓';
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 18px;
+  color: #228844;
+  font-family: 'Permanent Marker', cursive;
+}
+
+/* ── Push pin ─────────────────────────────────────────────── */
+.objective__pin {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pin-color, var(--pin-blue));
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  z-index: 2;
+}
+
+/* Pin needle */
+.objective__pin::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 7px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1));
+  border-radius: 0 0 1px 1px;
+}
+
+/* Pin colour variants */
+.objective__pin--red {
+  --pin-color: var(--pin-red);
+}
+
+.objective__pin--blue {
+  --pin-color: var(--pin-blue);
+}
+
+.objective__pin--green {
+  --pin-color: var(--pin-green);
+}
+
+.objective__pin--yellow {
+  --pin-color: var(--pin-yellow);
+}
+
+/* ── Objective number ─────────────────────────────────────── */
+.objective__number {
+  display: block;
+  font-size: 0.8em;
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+
+.objective__text {
+  display: block;
+}
+
+/* ── Empty slot grid (ghost notes below) ──────────────────── */
+.board__empty-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px 20px;
+  padding: 0 24px;
+}
+
+.board__slot {
+  height: 60px;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.board__slot:not(:empty) {
+  background: var(--note-bg);
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.3),
+    2px 4px 10px var(--note-shadow);
+}
+
+/* Scatter a few ambient pins across the cork */
+.board__pin {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--p-color, #cc3322);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}

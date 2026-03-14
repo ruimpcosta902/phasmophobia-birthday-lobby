@@ -7,14 +7,18 @@ const fs         = require('fs');
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+const BASEURL = process.env.BASEURL || `http://localhost:${PORT}`;
+const resourcesDir = path.join(__dirname, 'public', 'resources');
+const imgDir = path.join(resourcesDir, 'img');
 
 const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const { mapName, difficulty, players } = cfg;
-const REVEAL_AFTER = cfg.revealAfter; // ISO 8601 datetime string
+const REVEAL_AFTER_MIN = cfg.revealAfterMin;
+let REVEAL_AFTER = null;
 
 console.log(`Map: ${mapName} (${difficulty})`);
 console.log(`Players: ${players.join(', ')}`);
-console.log(`Reveal after: ${REVEAL_AFTER}`);
+console.log(`Reveal after: ${REVEAL_AFTER_MIN} minutes from all ready`);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── LOBBY ─────────────────────────────────────────────────────────────────────
@@ -48,10 +52,23 @@ const server = http.createServer(app);
 const wss    = new WebSocketServer({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/resources', express.static(path.join(__dirname, 'public', 'resources')));
 
 // Frontend fetches this to get lobby config on load
 app.get('/config', (_req, res) => {
   res.json({ mapName, difficulty, players, revealAfter: REVEAL_AFTER });
+});
+
+// Provide photo list for the waiting carousel
+app.get('/photos', (_req, res) => {
+  try {
+    const files = fs.readdirSync(imgDir)
+      .filter(f => /.*\.(jpe?g|png)$/i.test(f))
+      .sort();
+    res.json(files.map(f => `/resources/img/${f}`));
+  } catch (err) {
+    res.status(500).json({ error: 'Could not list photos.' });
+  }
 });
 
 // ── WEBSOCKET ─────────────────────────────────────────────────────────────────
@@ -63,6 +80,22 @@ const broadcast = (d)     => wss.clients.forEach(c => send(c, d));
 function broadcastState() {
   broadcast({ type: 'state', ...getLobbyState() });
 }
+
+function addMinutes(minutes, date = new Date()) {  
+  if (typeof minutes !== 'number') {
+    throw new Error('Invalid "minutes" argument')
+  }
+
+  if (!(date instanceof Date)) {
+    throw new Error('Invalid "date" argument')
+  }
+
+
+  date.setMinutes(date.getMinutes() + minutes)
+
+  return date
+}
+
 
 wss.on('connection', (ws, req) => {
   send(ws, { type: 'state', ...getLobbyState() });
@@ -106,9 +139,18 @@ wss.on('connection', (ws, req) => {
         broadcastState();
 
         if (getLobbyState().allReady) {
+          if (REVEAL_AFTER === null) {
+            REVEAL_AFTER = addMinutes(REVEAL_AFTER_MIN);
+            broadcast({ type: 'revealAfter', time: REVEAL_AFTER });
+          }
+
           // Delay slightly for drama, then tell everyone what phase to enter
           setTimeout(() => {
             broadcast({ type: isAfterReveal() ? 'start' : 'waiting' });
+            if (isAfterReveal()) {
+              // revert to null after a while to allow for new connections and testing without restart
+              setTimeout(() => {REVEAL_AFTER = null}, 500);
+            }
           }, 1200);
         }
         break;
@@ -130,4 +172,10 @@ wss.on('connection', (ws, req) => {
   ws.on('error', (err) => console.error('WS:', err.message));
 });
 
-server.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server ready: ${BASEURL}`);
+  console.log("Player URLs:");
+  for (const name of players) {
+    console.log(`${BASEURL}?player=${name}`);
+  }
+});

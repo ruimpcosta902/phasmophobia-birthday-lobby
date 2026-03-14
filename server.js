@@ -17,21 +17,29 @@ let cfg = loadConfig();
 let REVEAL_AFTER = null;
 
 function loadConfig() {
-  const raw = fs.readFileSync(configPath, 'utf8');
-  const parsed = JSON.parse(raw);
-  const players = Array.isArray(parsed.players) ? parsed.players.map(String) : [];
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const players = Array.isArray(parsed.players) ? parsed.players.map(String) : [];
 
-  return {
-    mapName: String(parsed.mapName || 'unknown'),
-    difficulty: String(parsed.difficulty || 'normal'),
-    players,
-    revealAfterMin: Number(parsed.revealAfterMin) || 0,
-  };
+    return {
+        mapName: String(parsed.mapName || 'unknown'),
+        difficulty: String(parsed.difficulty || 'normal'),
+        players,
+        secsPerPhoto: Number(parsed.secsPerPhoto) || 7.5,
+    };
 }
+
+const totalPhotoCount = () => {
+    try {
+        return fs.readdirSync(imgDir).filter(f => /.*\.(jpe?g|png)$/i.test(f)).length;
+    } catch {
+        return 0;
+    }
+};
 
 console.log(`Map: ${cfg.mapName} (${cfg.difficulty})`);
 console.log(`Players: ${cfg.players.join(', ')}`);
-console.log(`Reveal after: ${cfg.revealAfterMin} minutes from all ready`);
+console.log(`Secs per photo: ${cfg.secsPerPhoto} seconds`);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── LOBBY ─────────────────────────────────────────────────────────────────────
@@ -49,14 +57,14 @@ const setReady     = db.prepare('UPDATE players SET ready = 1 WHERE name = ?');
 const resetPlayer  = db.prepare('UPDATE players SET connected = 0, ready = 0 WHERE name = ?');
 
 function getLobbyState() {
-  const rows         = getPlayers.all();
-  const allConnected = rows.every(p => p.connected);
-  const allReady     = rows.every(p => p.ready);
-  return { players: rows, allConnected, allReady };
+    const rows         = getPlayers.all();
+    const allConnected = rows.every(p => p.connected);
+    const allReady     = rows.every(p => p.ready);
+    return { players: rows, allConnected, allReady };
 }
 
 function isAfterReveal() {
-  return new Date() >= new Date(REVEAL_AFTER);
+    return new Date() >= new Date(REVEAL_AFTER);
 }
 
 // ── APP ───────────────────────────────────────────────────────────────────────
@@ -70,77 +78,83 @@ app.use(express.json());
 
 // Frontend fetches this to get lobby config on load
 app.get('/config', (_req, res) => {
-  res.json({
-    mapName: cfg.mapName,
-    difficulty: cfg.difficulty,
-    players: cfg.players,
-    revealAfter: REVEAL_AFTER,
-    revealAfterMin: cfg.revealAfterMin,
-  });
+    res.json({
+        mapName: cfg.mapName,
+        difficulty: cfg.difficulty,
+        players: cfg.players,
+        secsPerPhoto: cfg.secsPerPhoto,
+        revealAfter: REVEAL_AFTER,
+        photoCount: totalPhotoCount(),
+    });
 });
 
 app.post('/config', (req, res) => {
-  const next = req.body;
-  if (!next || typeof next !== 'object') {
-    return res.status(400).json({ error: 'Invalid config payload' });
-  }
+    const next = req.body;
+    if (!next || typeof next !== 'object') {
+        return res.status(400).json({ error: 'Invalid config payload' });
+    }
 
-  const nextPlayers = Array.isArray(next.players) ? next.players.map(String) : null;
-  const nextMap = typeof next.mapName === 'string' ? next.mapName : null;
-  const nextDifficulty = typeof next.difficulty === 'string' ? next.difficulty : null;
-  const nextRevealAfterMin = Number.isFinite(Number(next.revealAfterMin)) ? Number(next.revealAfterMin) : null;
+    const nextPlayers = Array.isArray(next.players) ? next.players.map(String) : null;
+    const nextMap = typeof next.mapName === 'string' ? next.mapName : null;
+    const nextDifficulty = typeof next.difficulty === 'string' ? next.difficulty : null;
+    const nextSecsPerPhoto = Number.isFinite(Number(next.secsPerPhoto)) ? Number(next.secsPerPhoto) : null;
 
-  if (!nextMap || !nextDifficulty || !Array.isArray(nextPlayers) || nextPlayers.length === 0 || nextRevealAfterMin === null) {
-    return res.status(400).json({ error: 'Must include mapName, difficulty, players (non-empty array), revealAfterMin' });
-  }
+    if (!nextMap || !nextDifficulty || !Array.isArray(nextPlayers) || nextPlayers.length === 0 || nextSecsPerPhoto === null || nextSecsPerPhoto <= 0) {
+        return res.status(400).json({ error: 'Must include mapName, difficulty, players (non-empty array), secsPerPhoto > 0' });
+    }
 
-  const prevPlayers = cfg.players;
-  const playersChanged = prevPlayers.length !== nextPlayers.length
+    const prevPlayers = cfg.players;
+    const playersChanged = prevPlayers.length !== nextPlayers.length
     || prevPlayers.some((p, i) => p !== nextPlayers[i])
     || nextPlayers.some((p, i) => p !== prevPlayers[i]);
 
-  cfg = {
-    mapName: nextMap,
-    difficulty: nextDifficulty,
-    players: nextPlayers,
-    revealAfterMin: nextRevealAfterMin,
-  };
+    const secsChanged = cfg.secsPerPhoto !== nextSecsPerPhoto;
 
-  console.log('Config updated via POST /config:', cfg);
+    cfg = {
+        mapName: nextMap,
+        difficulty: nextDifficulty,
+        players: nextPlayers,
+        secsPerPhoto: nextSecsPerPhoto,
+    };
 
-  if (playersChanged) {
-    // Refresh lobby data, clear and reset tracked players to avoid stale state.
-    db.exec('DELETE FROM players');
-    for (const name of cfg.players) {
-      insert.run(name);
+    console.log('Config updated via POST /config:', cfg);
+
+    const shouldReload = playersChanged || secsChanged;
+    if (shouldReload) {
+        if (playersChanged) {
+            // Refresh lobby data, clear and reset tracked players to avoid stale state.
+            db.exec('DELETE FROM players');
+            for (const name of cfg.players) {
+                insert.run(name);
+            }
+        }
+        REVEAL_AFTER = null;
+        broadcast({ type: 'reload', message: 'Config updated, reload required' });
+        return res.json({ status: 'ok', message: 'Config updated, clients reloading' });
     }
-    REVEAL_AFTER = null;
-    broadcast({ type: 'reload', message: 'Config updated, reload required' });
-    return res.json({ status: 'ok', message: 'Config updated, clients reloading' });
-  }
 
-  broadcast({ type: 'config', config: { mapName: cfg.mapName, difficulty: cfg.difficulty, revealAfterMin: cfg.revealAfterMin } });
-  return res.json({ status: 'ok', message: 'Config updated' });
+    broadcast({ type: 'config', config: { mapName: cfg.mapName, difficulty: cfg.difficulty, secsPerPhoto: cfg.secsPerPhoto } });
+    return res.json({ status: 'ok', message: 'Config updated' });
 });
 
 // Provide photo list for the waiting carousel
 app.get('/photos', (_req, res) => {
-  try {
-    const files = fs.readdirSync(imgDir)
-      .filter(f => /.*\.(jpe?g|png)$/i.test(f))
-      .sort();
-    res.json(files.map(f => `/resources/img/${f}`));
-  } catch (err) {
-    res.status(500).json({ error: 'Could not list photos.' });
-  }
+    try {
+        const files = fs.readdirSync(imgDir)
+            .filter(f => /.*\.(jpe?g|png)$/i.test(f))
+            .sort();
+        res.json(files.map(f => `/resources/img/${f}`));
+    } catch {
+        res.status(500).json({ error: 'Could not list photos.' });
+    }
 });
 
 // Reset reveal timer
 app.post('/reset-reveal', (_req, res) => {
-  REVEAL_AFTER = null;
-  console.log('Reveal timer reset manually.');
-  res.send('Reveal timer reset.');
-  broadcastState();
+    REVEAL_AFTER = null;
+    console.log('Reveal timer reset manually.');
+    res.send('Reveal timer reset.');
+    broadcastState();
 });
 
 // ── WEBSOCKET ─────────────────────────────────────────────────────────────────
@@ -150,104 +164,110 @@ const send      = (ws, d) => ws.readyState === WebSocket.OPEN && ws.send(JSON.st
 const broadcast = (d)     => wss.clients.forEach(c => send(c, d));
 
 function broadcastState() {
-  broadcast({ type: 'state', ...getLobbyState() });
+    broadcast({ type: 'state', ...getLobbyState() });
 }
 
-function addMinutes(minutes, date = new Date()) {  
-  if (typeof minutes !== 'number') {
-    throw new Error('Invalid "minutes" argument')
-  }
+function addSeconds(seconds, date = new Date()) {
+    if (typeof seconds !== 'number') {
+        throw new Error('Invalid "seconds" argument');
+    }
 
-  if (!(date instanceof Date)) {
-    throw new Error('Invalid "date" argument')
-  }
+    if (!(date instanceof Date)) {
+        throw new Error('Invalid "date" argument');
+    }
 
-
-  date.setMinutes(date.getMinutes() + minutes)
-
-  return date
+    date.setSeconds(date.getSeconds() + seconds);
+    return date;
 }
 
 
 wss.on('connection', (ws, req) => {
-  send(ws, { type: 'state', ...getLobbyState() });
+    send(ws, { type: 'state', ...getLobbyState() });
 
-  ws.on('message', (raw) => {
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
+    ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch { return; }
 
-    switch (msg.type) {
+        switch (msg.type) {
 
-      case 'identify': {
-        const name = typeof msg.name === 'string' ? msg.name.trim() : null;
-        if (!cfg.players.includes(name)) {
-          send(ws, { type: 'error', message: 'Unknown operative.' });
-          return;
-        }
-        // Block if slot is already held by another live connection
-        for (const [otherWs, otherName] of connections) {
-          if (otherName === name && otherWs !== ws && otherWs.readyState === WebSocket.OPEN) {
-            send(ws, { type: 'error', message: 'Slot already taken by another connection.' });
-            return;
-          }
-        }
-        connections.set(ws, name);
-        setConnected.run(1, name);
-        broadcastState();
-        break;
-      }
-
-      case 'ready': {
-        const name = connections.get(ws);
-        if (!name) return;
-
-        const { allConnected } = getLobbyState();
-        if (!allConnected) {
-          send(ws, { type: 'error', message: 'Not all players connected yet.' });
-          return;
-        }
-
-        setReady.run(name);
-        broadcastState();
-
-        if (getLobbyState().allReady) {
-          if (REVEAL_AFTER === null) {
-            REVEAL_AFTER = addMinutes(cfg.revealAfterMin);
-            broadcast({ type: 'revealAfter', time: REVEAL_AFTER });
-          }
-
-          // Delay slightly for drama, then tell everyone what phase to enter
-          setTimeout(() => {
-            broadcast({ type: isAfterReveal() ? 'start' : 'waiting' });
-            if (isAfterReveal()) {
-              // revert to null after a while to allow for new connections and testing without restart
-              setTimeout(() => {REVEAL_AFTER = null}, 500);
+        case 'identify': {
+            const name = typeof msg.name === 'string' ? msg.name.trim() : null;
+            if (!cfg.players.includes(name)) {
+                send(ws, { type: 'error', message: 'Unknown operative.' });
+                return;
             }
-          }, 1200);
+            // Block if slot is already held by another live connection
+            for (const [otherWs, otherName] of connections) {
+                if (otherName === name && otherWs !== ws && otherWs.readyState === WebSocket.OPEN) {
+                    send(ws, { type: 'error', message: 'Slot already taken by another connection.' });
+                    return;
+                }
+            }
+            connections.set(ws, name);
+            setConnected.run(1, name);
+            broadcastState();
+            break;
         }
-        break;
-      }
-    }
-  });
 
-  ws.on('close', () => {
-    const name = connections.get(ws);
-    if (name) {
-      connections.delete(ws);
-      if (![...connections.values()].includes(name)) {
-        resetPlayer.run(name);
-        broadcastState();
-      }
-    }
-  });
+        case 'ready': {
+            const name = connections.get(ws);
+            if (!name) return;
 
-  ws.on('error', (err) => console.error('WS:', err.message));
+            const { allConnected } = getLobbyState();
+            if (!allConnected) {
+                send(ws, { type: 'error', message: 'Not all players connected yet.' });
+                return;
+            }
+
+            setReady.run(name);
+            broadcastState();
+
+            if (getLobbyState().allReady) {
+                if (REVEAL_AFTER === null) {
+                    const photoCount = totalPhotoCount() || 1;
+                    const revealDelaySeconds = cfg.secsPerPhoto * photoCount;
+                    REVEAL_AFTER = addSeconds(revealDelaySeconds);
+                    broadcast({
+                        type: 'revealAfter',
+                        time: REVEAL_AFTER,
+                        secsPerPhoto: cfg.secsPerPhoto,
+                        photoCount,
+                        revealDelaySeconds,
+                    });
+                }
+
+                // Delay slightly for drama, then tell everyone what phase to enter
+                setTimeout(() => {
+                    broadcast({ type: isAfterReveal() ? 'start' : 'waiting' });
+                    if (isAfterReveal()) {
+                        // revert to null after a while to allow for new connections and testing without restart
+                        setTimeout(() => { REVEAL_AFTER = null; }, 500);
+                    }
+                }, 1200);
+            }
+            break;
+        }
+        }
+    });
+
+    ws.on('close', () => {
+        const name = connections.get(ws);
+        if (name) {
+            connections.delete(ws);
+            if (![...connections.values()].includes(name)) {
+                resetPlayer.run(name);
+                broadcastState();
+            }
+        }
+    });
+
+    ws.on('error', (err) => console.error('WS:', err.message));
 });
 
 server.listen(PORT, () => {
-  console.log(`Server ready: ${BASEURL}`);
-  console.log("Player URLs:");
-  for (const name of cfg.players) {
-    console.log(`${BASEURL}?player=${name}`);
-  }
+    console.log(`Server ready: ${BASEURL}`);
+    console.log('Player URLs:');
+    for (const name of cfg.players) {
+        console.log(`${BASEURL}?player=${name}`);
+    }
 });

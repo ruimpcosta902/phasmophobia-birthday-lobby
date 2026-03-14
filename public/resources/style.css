@@ -312,6 +312,41 @@ body::after {
     align-items: flex-start;
 }
 
+.audio-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.audio-controls label {
+    font-size: 10px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.audio-controls input[type="range"] {
+    flex: 1;
+}
+
+.audio-controls .ready-btn {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    line-height: 1.2;
+    text-transform: uppercase;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--dim);
+}
+
+.audio-controls .ready-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+
 @media (max-width: 720px) {
     .waiting-main {
         flex-direction: column;

@@ -1,8 +1,6 @@
 // ── Audio setup ───────────────────────────────────────────
 const welcomeSound = new Audio('/resources/sounds/phasmophobia-welcome-back.mp3');
-const heartbeatSound = new Audio('/resources/sounds/phasmophobia-heartbeat.mp3');
-const crucifixSound = new Audio('/resources/sounds/phasmophobia-crucifix-burn.mp3');
-heartbeatSound.loop = true;
+const djSound = new Audio('/resources/sounds/phasmophobia-dj-kraken.mp3');
 
 // ── Read ?player= from URL ────────────────────────────────
 const urlName = new URLSearchParams(location.search).get('player')?.trim() || null;
@@ -10,6 +8,9 @@ let playerName = null;
 
 let ws = null;
 let revealAfter = null;
+let secsPerPhoto = 5;
+let playbackVolume = 1;
+let isMuted = false;
 let allConnectedOnce = false;
 let countdownInterval = null;
 let waitingPhotos = [];
@@ -31,6 +32,43 @@ const playerInput = document.getElementById('player-input');
 const countdownEl = document.getElementById('countdown');
 const waitingPhotoEl = document.getElementById('waiting-photo');
 const waitingTitleEl = document.getElementById('photo-title');
+const volumeSlider = document.getElementById('volume-slider');
+const muteButton = document.getElementById('mute-button');
+
+function setAudioVolume(value) {
+    playbackVolume = Math.max(0, Math.min(1, Number(value)));
+    const effective = isMuted ? 0 : playbackVolume;
+    [welcomeSound, djSound].forEach(sound => {
+        if (sound && typeof sound.volume === 'number') {
+            sound.volume = effective;
+        }
+    });
+    if (volumeSlider) volumeSlider.value = String(playbackVolume);
+    if (muteButton) muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
+}
+
+function toggleMute() {
+    isMuted = !isMuted;
+    setAudioVolume(playbackVolume);
+}
+
+if (volumeSlider) {
+    volumeSlider.addEventListener('input', event => {
+        setAudioVolume(event.target.value);
+        if (isMuted) {
+            isMuted = false;
+            if (muteButton) muteButton.textContent = 'Mute';
+        }
+    });
+}
+
+if (muteButton) {
+    muteButton.addEventListener('click', () => {
+        toggleMute();
+    });
+}
+
+setAudioVolume(1);
 
 function fetchWaitingPhotos() {
     fetch('/photos')
@@ -40,8 +78,8 @@ function fetchWaitingPhotos() {
             waitingPhotos = list;
             setWaitingPhoto(0);
         })
-        .catch(() => {
-            // silent fallback
+        .catch((err) => {
+            console.error('Failed to fetch waiting photos:', err);
         });
 }
 
@@ -59,12 +97,18 @@ function setWaitingPhoto(idx) {
     const url = waitingPhotos[waitingPhotoIndex];
     waitingPhotoEl.src = url;
     waitingTitleEl.textContent = formatPhotoTitle(url);
+
 }
 
 function startPhotoCarousel() {
+    console.log('Starting photo carousel with', waitingPhotos.length, 'photos, changing every', secsPerPhoto, 'seconds');
     if (!waitingPhotos.length) return;
     setWaitingPhoto(0);
-    carouselInterval = setInterval(() => setWaitingPhoto(waitingPhotoIndex + 1), 7500);
+    carouselInterval = setInterval(() => setWaitingPhoto(waitingPhotoIndex + 1), secsPerPhoto * 1000);
+    djSound.currentTime = 0;
+    djSound.play().catch(() => {
+        console.error('Failed to play song:', err);
+    });
 }
 
 function stopPhotoCarousel() {
@@ -116,6 +160,9 @@ enterBtn.addEventListener('click', () => {
         .then(r => r.json())
         .then(cfg => {
             mapNameEl.textContent = `${cfg.mapName} — ${cfg.difficulty}`;
+            if (typeof cfg.secsPerPhoto === 'number' && cfg.secsPerPhoto > 0) {
+                secsPerPhoto = cfg.secsPerPhoto;
+            }
 
             // Validate name against server config before connecting
             if (!cfg.players.includes(playerName)) {
@@ -126,7 +173,7 @@ enterBtn.addEventListener('click', () => {
             lobbyEl.style.display = 'flex';
             addLog(`// Connecting as ${playerName}…`);
             connect();
-            addLog("Welcome back! I've got some jobs ready for you.")
+            addLog("Welcome back! I've got some jobs ready for you.");
             welcomeSound.play();
         })
         .catch(() => showError('Could not reach the server. Try refreshing.'));
@@ -202,7 +249,7 @@ function renderLobby({ players, allConnected }) {
 // ── Waiting + countdown ───────────────────────────────────
 function showWaiting() {
     addLog('// All ready. Operation window not yet open…', 'warn');
-    heartbeatSound.play();
+
     setTimeout(() => {
         fadeOut(lobbyEl, () => {
             waitingEl.style.display = 'flex';
@@ -219,7 +266,6 @@ function hideWaiting() {
     addLog('// Something happened, back to lobby!', 'warn');
 
     stopPhotoCarousel();
-    heartbeatSound.pause();
 
     fadeOut(waitingEl, () => {
         waitingEl.classList.remove('visible');
@@ -249,7 +295,6 @@ function startCountdown() {
 function revealInvite() {
     clearInterval(countdownInterval);
     stopPhotoCarousel();
-    heartbeatSound.pause();
 
     const targetUrl = '/invite.html' + (playerName ? `?player=${encodeURIComponent(playerName)}` : '');
     window.location.href = targetUrl;
@@ -284,25 +329,31 @@ function connect() {
     ws.onmessage = ({ data }) => {
         let msg; try { msg = JSON.parse(data); } catch { return; }
         switch (msg.type) {
-            case 'state': renderLobby(msg); break;
-            case 'waiting': showWaiting(); break;
-            case 'start': startCountdown(); break;
-            case 'error': addLog(`// ERROR: ${msg.message}`, 'err'); break;
-            case 'revealAfter': {
-                revealAfter = new Date(msg.time);
-                addLog(`// Operation window opens at ${revealAfter.toLocaleString()}.`, 'info');
-                break;
+        case 'state': renderLobby(msg); break;
+        case 'waiting': showWaiting(); break;
+        case 'start': startCountdown(); break;
+        case 'error': addLog(`// ERROR: ${msg.message}`, 'err'); break;
+        case 'revealAfter': {
+            revealAfter = new Date(msg.time);
+            if (typeof msg.secsPerPhoto === 'number' && msg.secsPerPhoto > 0) {
+                secsPerPhoto = msg.secsPerPhoto;
             }
-            case 'reload': {
-                addLog('// Server requested reload due to config update.', 'info');
-                setTimeout(() => location.reload(), 1000);
-                break;
+            addLog(`// Operation window opens at ${revealAfter.toLocaleString()}.`, 'info');
+            break;
+        }
+        case 'reload': {
+            addLog('// Server requested reload due to config update.', 'info');
+            setTimeout(() => location.reload(), 1000);
+            break;
+        }
+        case 'config': {
+            if (msg.config && typeof msg.config.secsPerPhoto === 'number' && msg.config.secsPerPhoto > 0) {
+                secsPerPhoto = msg.config.secsPerPhoto;
             }
-            case 'config': {
-                addLog('// Server config changed. Reloading.', 'info');
-                setTimeout(() => location.reload(), 1000);
-                break;
-            }
+            addLog('// Server config changed. Reloading.', 'info');
+            setTimeout(() => location.reload(), 1000);
+            break;
+        }
         }
     };
 
